@@ -67,12 +67,22 @@ public:
     using ComponentMask = uint64_t;
 
 public:
-    ECS(void);
-    ~ECS(void);
+    static std::shared_ptr<ECS> Create()
+    {
+        return std::shared_ptr<ECS>(new ECS());
+    }
 
+    ECS(const ECS&) = delete;
+    ECS(ECS&&) = delete;
+
+    ECS &operator=(const ECS&) = delete;
+    ECS &operator=(ECS&&) = delete;
+
+    // Entities
     Entity CreateEntity(void);
     void DestroyEntity(Entity e);
 
+    // View
     template <typename... Components>
     std::unique_ptr<View<Components...>> GetView(void);
 
@@ -119,6 +129,8 @@ private:
     std::unordered_map<SystemID, std::unique_ptr<ISystem>> m_Systems;
 
 private:
+    ECS() = default;
+
     // Components
     template <typename T>
     void RegisterComponentMask(void);
@@ -167,14 +179,6 @@ void View<Components...>::GetAll(F &&lambda)
 }
 
 // ECS Impl
-ECS::ECS(void)
-{
-}
-
-ECS::~ECS(void)
-{
-}
-
 Entity ECS::CreateEntity(void)
 {
     ECS_LOG_ASSERT((m_NextEntity < MAX_ENTITIES));
