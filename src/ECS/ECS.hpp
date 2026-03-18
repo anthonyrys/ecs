@@ -22,22 +22,22 @@ namespace ECS
 
 
 using Entity = uint64_t;
-using ComponentMask = uint64_t;
 
 class ECS;
 
 // ISystem
 struct ISystem {
-    virtual ~ISystem() = default;
-
-    virtual void Update() = 0;
-    virtual void Render() = 0;
+    virtual ~ISystem(void) = default;
+    virtual void Call(void) = 0;
 };
 
 // View
 template<typename... Components>
 class View
 {
+public:
+    using ComponentMask = uint64_t;
+
 public:
     View(std::shared_ptr<ECS> ecs);
     ~View(void);
@@ -60,8 +60,11 @@ public:
     static constexpr size_t MAX_ENTITIES = 2048u;
     static constexpr size_t MAX_COMPONENTS = 64u;
 
+    using SystemID = std::type_index;
     using ComponentID = std::type_index;
+
     using ComponentBitset = std::bitset<MAX_COMPONENTS>;
+    using ComponentMask = uint64_t;
 
 public:
     ECS(void);
@@ -71,7 +74,7 @@ public:
     void DestroyEntity(Entity e);
 
     template <typename... Components>
-    std::unique_ptr<View<Components...>> GetView();
+    std::unique_ptr<View<Components...>> GetView(void);
 
     // Components
     template <typename T>
@@ -91,11 +94,16 @@ public:
     
     // Systems
     template <typename T, typename... Args>
-    void AddSystem(Args&&... args);
+    T &AddSystem(Args&&... args);
 
-    // Runtime
-    void Update(void);
-    void Render(void);
+    template <typename T>
+    T &GetSystem(void);
+
+    template <typename T>
+    void CallSystem(void);
+
+    template <typename... Systems>
+    void CallSystems(void);
 
 private:
     SparseSet<Entity, ComponentMask> m_CurrentEntities;
@@ -108,26 +116,26 @@ private:
     std::unordered_map<ComponentMask, std::unique_ptr<ISparseSet>> m_ComponentSets;
     std::unordered_map<ComponentMask, SparseSet<Entity, Entity>> m_EntitySets;
 
-    std::vector<std::unique_ptr<ISystem>> m_Systems;
+    std::unordered_map<SystemID, std::unique_ptr<ISystem>> m_Systems;
 
 private:
     // Components
     template <typename T>
-    void RegisterComponentMask();
+    void RegisterComponentMask(void);
     
     template <typename... Components>
-    ComponentMask GetComponentMask();
+    ComponentMask GetComponentMask(void);
 
     template <typename T>
-    ComponentMask GetComponentMaskImpl();
+    ComponentMask GetComponentMaskImpl(void);
 
-    ComponentMask CreateComponentMask() const;
+    ComponentMask CreateComponentMask(void) const;
     
     template <typename T>
-    void RegisterComponentSet();
+    void RegisterComponentSet(void);
 
     template <typename T>
-    SparseSet<Entity, T> &GetComponentSet();
+    SparseSet<Entity, T> &GetComponentSet(void);
 };
 
 // View Impl
@@ -205,31 +213,51 @@ void ECS::DestroyEntity(Entity e)
 }
 
 template <typename... Components>
-std::unique_ptr<View<Components...>> ECS::GetView()
+std::unique_ptr<View<Components...>> ECS::GetView(void)
 {
     return std::make_unique<View<Components...>>(this->shared_from_this());
 }
 
 template <typename T, typename... Args>
-void ECS::AddSystem(Args&&... args)
+T &ECS::AddSystem(Args&&... args)
 {
-    // For virtual functions Update/Render
-    ECS_LOG_ASSERT((std::is_base_of<ISystem, T>()));
+    ECS_LOG_STATIC_ASSERT((std::is_base_of<ISystem, T>::value));
 
     // All systems must have a constructor for shared_ptr<ECS>
-    m_Systems.push_back(std::make_unique<T>(this->shared_from_this(), std::forward<Args>(args)...));
+    SystemID id = SystemID(typeid(T));
+    m_Systems[id] = std::make_unique<T>(this->shared_from_this(), std::forward<Args>(args)...);
+
+    return *static_cast<T*>(m_Systems[id].get()); 
 }
 
-void ECS::Update(void)
+template <typename T>
+T &ECS::GetSystem(void)
 {
-    for (const std::unique_ptr<ISystem> &s : m_Systems)
-        s->Update();
+    ECS_LOG_STATIC_ASSERT((std::is_base_of<ISystem, T>::value));
+
+    SystemID id = SystemID(typeid(T));
+    auto itr = m_Systems.find(id);
+
+    ECS_LOG_ASSERT((itr != m_Systems.end()));
+    return *static_cast<T*>(itr->second.get());
 }
 
-void ECS::Render(void)
+template <typename T>
+void ECS::CallSystem(void)
 {
-     for (const std::unique_ptr<ISystem> &s : m_Systems)
-        s->Render();
+    ECS_LOG_STATIC_ASSERT((std::is_base_of<ISystem, T>::value));
+
+    SystemID id = SystemID(typeid(T));
+    auto itr = m_Systems.find(id);
+
+    ECS_LOG_ASSERT((itr != m_Systems.end()));
+    itr->second->Call();
+}
+
+template <typename... Systems>
+void ECS::CallSystems(void)
+{
+    (CallSystem<Systems>(), ...);
 }
 
 template <typename T>
@@ -310,20 +338,20 @@ bool ECS::HasComponent(Entity e)
 }
 
 template <typename T>
-void ECS::RegisterComponentMask()
+void ECS::RegisterComponentMask(void)
 {
     ComponentID id = ComponentID(typeid(T));
     m_ComponentMasks[id] = this->CreateComponentMask();
 }
 
 template <typename... Components>
-ComponentMask ECS::GetComponentMask()
+ECS::ComponentMask ECS::GetComponentMask(void)
 {
     return (this->GetComponentMaskImpl<Components>() | ...);
 }
 
 template <typename T>
-ComponentMask ECS::GetComponentMaskImpl()
+ECS::ComponentMask ECS::GetComponentMaskImpl(void)
 {
     ComponentID id = ComponentID(typeid(T));
     if (m_ComponentMasks.find(id) == m_ComponentMasks.end())
@@ -332,7 +360,7 @@ ComponentMask ECS::GetComponentMaskImpl()
     return m_ComponentMasks[id];
 }
 
-ComponentMask ECS::CreateComponentMask() const
+ECS::ComponentMask ECS::CreateComponentMask(void) const
 {
     static size_t s_NextComponentMaskIndex = 0;
     ECS_LOG_ASSERT((s_NextComponentMaskIndex < MAX_COMPONENTS));
@@ -342,14 +370,14 @@ ComponentMask ECS::CreateComponentMask() const
 }
 
 template <typename T>
-void ECS::RegisterComponentSet()
+void ECS::RegisterComponentSet(void)
 {
     ComponentMask mask = this->GetComponentMask<T>();
     m_ComponentSets[mask] = std::make_unique<SparseSet<Entity, T>>();
 }
 
 template <typename T>
-SparseSet<Entity, T> &ECS::GetComponentSet()
+SparseSet<Entity, T> &ECS::GetComponentSet(void)
 {
     ComponentMask mask = this->GetComponentMask<T>();
     if (m_ComponentSets.find(mask) == m_ComponentSets.end())

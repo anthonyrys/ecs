@@ -6,6 +6,8 @@
 #include <cstdlib>
 #include <iostream>
 
+#define ECS_TS(x) #x
+
 #ifdef ECS_DEBUG
     #define ECS_LOG_ASSERT(condition) \
         do { \
@@ -14,6 +16,9 @@
                 std::abort(); \
             } \
         } while (0)
+
+    #define ECS_LOG_STATIC_ASSERT(condition) \
+        static_assert(condition, "[" __FILE__ ":" ECS_TS(__LINE__) "] " #condition)
 
     #define ECS_LOG_INFO(str) \
         do { \
@@ -28,6 +33,8 @@
         } while (0)
 #else
     #define ECS_LOG_ASSERT(condition) ((void) 0)
+    #define ECS_LOG_STATIC_ASSERT(condition) ((void) 0)
+
     #define ECS_LOG_INFO(str) ((void) 0)
     #define ECS_LOG_INFOF(fmt, ...) ((void) 0)
 #endif

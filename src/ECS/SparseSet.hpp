@@ -54,7 +54,7 @@ template <typename T, typename Y>
 SparseSet<T, Y>::SparseSet(size_t r)
 {
     // T should be typecastable to size_t for indexing
-    ECS_LOG_ASSERT((std::is_convertible_v<T, size_t>));
+    ECS_LOG_STATIC_ASSERT((std::is_convertible_v<T, size_t>));
     m_Sparse.reserve(r);
 }
 
