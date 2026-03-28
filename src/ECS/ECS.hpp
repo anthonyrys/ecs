@@ -39,8 +39,8 @@ public:
     using ComponentMask = uint64_t;
 
 public:
+    View() = delete;
     View(std::shared_ptr<ECS> ecs);
-    ~View(void);
 
     template <typename F>
     void GetAll(F&& lambda);
@@ -156,11 +156,6 @@ View<Components...>::View(std::shared_ptr<ECS> ecs)
     : m_ECS(ecs)
 {
     m_Mask = ecs->GetComponentMask<Components...>();
-}
-
-template <typename... Components>
-View<Components...>::~View(void)
-{
 }
 
 template <typename... Components>
