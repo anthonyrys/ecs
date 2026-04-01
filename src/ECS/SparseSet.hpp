@@ -17,7 +17,8 @@ namespace ECS
 
 
 // ISparseSet
-struct ISparseSet {
+struct ISparseSet 
+{
     virtual ~ISparseSet() = default;
     virtual void Delete(size_t) = 0;
 };

@@ -26,7 +26,8 @@ using Entity = uint64_t;
 class ECS;
 
 // ISystem
-struct ISystem {
+struct ISystem 
+{
     virtual ~ISystem(void) = default;
     virtual void Call(void) = 0;
 };
@@ -114,6 +115,15 @@ public:
 
     template <typename... Systems>
     void CallSystems(void);
+
+    template <typename T>
+    void RemoveSystem(void);
+
+    template <typename... Systems>
+    void RemoveSystems(void);
+
+    template <typename T>
+    bool HasSystem() const;
 
 private:
     SparseSet<Entity, ComponentMask> m_CurrentEntities;
@@ -257,6 +267,33 @@ template <typename... Systems>
 void ECS::CallSystems(void)
 {
     (CallSystem<Systems>(), ...);
+}
+
+template <typename T>
+void ECS::RemoveSystem(void)
+{
+    ECS_LOG_STATIC_ASSERT((std::is_base_of<ISystem, T>::value));
+
+    SystemID id = SystemID(typeid(T));
+    auto itr = m_Systems.find(id);
+
+    ECS_LOG_ASSERT((itr != m_Systems.end()));
+    m_Systems.erase(itr);
+}
+
+template <typename... Systems>
+void ECS::RemoveSystems(void)
+{
+    (RemoveSystem<Systems>(), ...);
+}
+
+template <typename T>
+bool ECS::HasSystem(void) const
+{
+    ECS_LOG_STATIC_ASSERT((std::is_base_of<ISystem, T>::value));
+    
+    SystemID id = SystemID(typeid(T));
+    return m_Systems.find(id) != m_Systems.end();
 }
 
 template <typename T>
